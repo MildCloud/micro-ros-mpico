@@ -13,4 +13,11 @@
 
 #define PI 3.142
 
+typedef struct
+{
+    float x;
+    float y;
+    float yaw;
+} odom_t;
+
 #endif
