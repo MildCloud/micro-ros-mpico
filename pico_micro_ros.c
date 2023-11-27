@@ -74,22 +74,27 @@ void twist_callback(const void *msg_in) {
 
 void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
+    float left_delta, right_delta, delta_d, delta_x, delta_y, delta_yaw;
     // left delta
-    array_msg.data.data[0] = LEFT_ENC_POL * enc2meters * rc_encoder_read_delta(1);
-    // array_msg.data.data[2] = LEFT_ENC_POL * enc2meters * rc_encoder_read_count(1);
+    left_delta = LEFT_ENC_POL * enc2meters * rc_encoder_read_delta(1);
     // right delta
-    array_msg.data.data[1] = RIGHT_ENC_POL * enc2meters * rc_encoder_read_delta(3);
-    // array_msg.data.data[3] = RIGHT_ENC_POL * enc2meters * rc_encoder_read_count(3);
+    right_delta = RIGHT_ENC_POL * enc2meters * rc_encoder_read_delta(3);
 
-    float delta_d, delta_yaw;
-    delta_d = (current_encoders.left_delta * enc2meters + current_encoders.right_delta * enc2meters) / 2;
-    delta_yaw = (current_encoders.right_delta * enc2meters - current_encoders.left_delta * enc2meters) / WHEEL_BASE;
+    delta_d = (left_delta + right_delta) / 2;
+    delta_yaw = (right_delta - left_delta) / WHEEL_BASE;
+    delta_x = delta_d * cos(current_odom.yaw + delta_yaw / 2);
+    delta_y = delta_d * sin(current_odom.yaw + delta_yaw / 2);
     current_odom.x += delta_x;
     current_odom.y += delta_y;
     current_odom.yaw += delta_yaw;
-    array_msg.data.data[2] = current_odom.x;
-    array_msg.data.data[3] = current_odom.y;
-    array_msg.data.data[4] = current_odom.yaw;
+
+    array_msg.data.data[0] = left_delta;
+    array_msg.data.data[1] = right_delta;
+    array_msg.data.data[2] = LEFT_ENC_POL * enc2meters * rc_encoder_read_count(1);
+    array_msg.data.data[3] = RIGHT_ENC_POL * enc2meters * rc_encoder_read_count(3);
+    array_msg.data.data[4] = current_odom.x;
+    array_msg.data.data[5] = current_odom.y;
+    array_msg.data.data[6] = current_odom.yaw;
     rcl_ret_t ret = rcl_publish(&publisher, &array_msg, NULL);
     // pico_publish_msg.data++;
 }
@@ -169,8 +174,8 @@ int main()
 
     pico_publish_msg.data = 0;
 
-    array_msg.data.capacity = 6;
-    array_msg.data.size = 5;
+    array_msg.data.capacity = 8;
+    array_msg.data.size = 7;
     array_msg.data.data = (float *)malloc(sizeof(float) * array_msg.data.capacity);
 
     current_odom.x = 0;
