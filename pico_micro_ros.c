@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
@@ -48,7 +49,7 @@ void twist_callback(const void *msg_in) {
         rc_motor_set(3, 0);
         gpio_put(LED_PIN, 0);
     }
-    else if (linear_x = 0 && angular_z < 0) {
+    else if (linear_x == 0 && angular_z < 0) {
         gpio_put(LED_PIN, 1);
         // set the left motor
         rc_motor_set(1, LEFT_MOTOR_POL * 10000);
@@ -59,7 +60,7 @@ void twist_callback(const void *msg_in) {
         rc_motor_set(3, 0);
         gpio_put(LED_PIN, 0);
     }
-    else if (linear_x = 0 && angular_z > 0) {
+    else if (linear_x == 0 && angular_z > 0) {
         gpio_put(LED_PIN, 1);
         // set the left motor
         // rc_motor_set(1, LEFT_MOTOR_POL * 10000);
@@ -183,6 +184,7 @@ int main()
     current_odom.yaw = 0;
     while (true)
     {
+        // TODO should we put the update of odometry here?
         rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
     }
 
