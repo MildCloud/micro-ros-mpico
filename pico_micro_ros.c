@@ -5,10 +5,14 @@
 #include <rcl/error_handling.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
+#include <rmw_microros/rmw_microros.h>
+#include <micro_ros_utilities/string_utilities.h>
+
+// include msgs
 #include <std_msgs/msg/int32.h>
 #include <std_msgs/msg/float32_multi_array.h>
-#include <rmw_microros/rmw_microros.h>
 #include <geometry_msgs/msg/twist.h>
+#include <nav_msgs/msg/odometry.h>
 
 // Control board library
 #include <hardware/adc.h>
@@ -25,13 +29,31 @@ const uint LED_PIN = 25;
 float enc2meters = ((2.0 * PI * WHEEL_RADIUS) / (GEAR_RATIO * ENCODER_RES));
 
 rcl_publisher_t publisher;
+rcl_publisher_t odom_publisher;
 std_msgs__msg__Int32 pico_publish_msg;
 std_msgs__msg__Float32MultiArray array_msg;
+nav_msgs__msg__Odometry odom_msg;
 
 rcl_subscription_t subscriber;
 geometry_msgs__msg__Twist sub_msg;
 
 odom_t current_odom;
+
+
+quaternion_t Euler2Quaternion(float roll, float pitch, float yaw) {
+    double cr = cos(roll * 0.5);
+    double sr = sin(roll * 0.5);
+    double cy = cos(yaw * 0.5);
+    double sy = sin(yaw * 0.5);
+    double cp = cos(pitch * 0.5);
+    double sp = sin(pitch * 0.5);
+    quaternion_t q;
+    q.w = cy * cp * cr + sy * sp * sr;
+    q.x = cy * cp * sr - sy * sp * cr;
+    q.y = sy * cp * sr + cy * sp * cr;
+    q.z = sy * cp * cr - cy * sp * sr;
+    return q;
+}
 
 void twist_callback(const void *msg_in) {
     const geometry_msgs__msg__Twist *twist_msg = (const geometry_msgs__msg__Twist *)msg_in;
@@ -75,6 +97,10 @@ void twist_callback(const void *msg_in) {
 
 void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
+    static float current_time = 0;
+    static float last_time = 0;
+    current_time = rmw_uros_epoch_millis();
+    float dt = (current_time - last_time) / 1000.0;
     float left_delta, right_delta, delta_d, delta_x, delta_y, delta_yaw;
     // left delta
     left_delta = LEFT_ENC_POL * enc2meters * rc_encoder_read_delta(1);
@@ -97,7 +123,21 @@ void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     array_msg.data.data[5] = current_odom.y;
     array_msg.data.data[6] = current_odom.yaw;
     rcl_ret_t ret = rcl_publish(&publisher, &array_msg, NULL);
-    // pico_publish_msg.data++;
+
+    int64_t stamp = rmw_uros_epoch_millis();
+    odom_msg.header.stamp.sec = (int32_t)(stamp / 1000);
+    odom_msg.header.stamp.nanosec = (uint32_t)((stamp % 1000) * 1e6);
+    odom_msg.pose.pose.position.x = current_odom.x;
+    odom_msg.pose.pose.position.y = current_odom.y;
+    quaternion_t q = Euler2Quaternion(0.0, 0.0, current_odom.yaw);
+    odom_msg.pose.pose.orientation.w = q.w;
+    odom_msg.pose.pose.orientation.x = q.x;
+    odom_msg.pose.pose.orientation.y = q.y;
+    odom_msg.pose.pose.orientation.z = q.z;
+    odom_msg.twist.twist.angular.z = delta_yaw / dt;
+    odom_msg.twist.twist.linear.x = delta_d / dt;
+    rcl_publish(&odom_publisher, &odom_msg, NULL);
+    last_time = current_time;
 }
 
 int main()
@@ -151,7 +191,7 @@ int main()
         ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
         "/cmd_vel");
 
-    rclc_executor_init(&executor, &support.context, 2, &allocator);
+    rclc_executor_init(&executor, &support.context, 3, &allocator);
     rclc_executor_add_subscription(&executor, &subscriber, &sub_msg, &twist_callback, ON_NEW_DATA);
     
     // init publisher
@@ -160,6 +200,12 @@ int main()
 			&node,
 			ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
 			"pico_publisher");
+
+    rclc_publisher_init_default(
+			&odom_publisher,
+			&node,
+			ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
+			"odom_publisher");
 
     // init timer
     rclc_timer_init_default(
@@ -178,6 +224,9 @@ int main()
     array_msg.data.capacity = 8;
     array_msg.data.size = 7;
     array_msg.data.data = (float *)malloc(sizeof(float) * array_msg.data.capacity);
+
+    micro_ros_string_utilities_set(odom_msg.header.frame_id, "odom");
+    micro_ros_string_utilities_set(odom_msg.child_frame_id, "base_link");
 
     current_odom.x = 0;
     current_odom.y = 0;
