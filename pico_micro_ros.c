@@ -199,13 +199,13 @@ int main()
 			&publisher,
 			&node,
 			ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
-			"pico_publisher");
+			"/pico_publisher");
 
     rclc_publisher_init_default(
 			&odom_publisher,
 			&node,
 			ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
-			"odom_publisher");
+			"/odom");
 
     // init timer
     rclc_timer_init_default(
