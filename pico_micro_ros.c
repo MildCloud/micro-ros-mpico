@@ -55,44 +55,64 @@ quaternion_t Euler2Quaternion(float roll, float pitch, float yaw) {
     return q;
 }
 
-void twist_callback(const void *msg_in) {
-    const geometry_msgs__msg__Twist *twist_msg = (const geometry_msgs__msg__Twist *)msg_in;
-    float linear_x = twist_msg->linear.x;
-    float angular_z = twist_msg->angular.z;
+float clamp_duty(float duty)
+{
+    if (duty > 1.0)
+    {
+        return 1.0;
+    }
+    else if (duty < -1.0)
+    {
+        return -1.0;
+    }
+    return duty;
+}
 
-    if (linear_x > 0 && angular_z == 0) {
-        gpio_put(LED_PIN, 1);
-        // set the left motor
-        rc_motor_set(1, LEFT_MOTOR_POL * 10000);
-        // set the right motor
-        rc_motor_set(3, RIGHT_MOTOR_POL * 10000);
-        sleep_ms(400);
-        rc_motor_set(1, 0);
-        rc_motor_set(3, 0);
-        gpio_put(LED_PIN, 0);
+void twist_callback(const void *msg_in) {
+    gpio_put(LED_PIN, 1);
+    int16_t l_cmd, r_cmd;
+    float left_sp, right_sp, l_duty, r_duty;
+    const geometry_msgs__msg__Twist *twist_msg = (const geometry_msgs__msg__Twist *)msg_in;
+    float linear_vel = twist_msg->linear.x;
+    float angular_vel = twist_msg->angular.z;
+
+    left_sp = linear_vel - WHEEL_BASE * angular_vel / 2;
+    right_sp = linear_vel + WHEEL_BASE * angular_vel / 2;
+
+    if (left_sp > 0.05) {
+        l_duty = SLOPE_L * left_sp + INTERCEPT_L;
     }
-    else if (linear_x == 0 && angular_z < 0) {
-        gpio_put(LED_PIN, 1);
-        // set the left motor
-        rc_motor_set(1, LEFT_MOTOR_POL * 10000);
-        // set the right motor
-        // rc_motor_set(3, RIGHT_MOTOR_POL * 10000);
-        sleep_ms(400);
-        rc_motor_set(1, 0);
-        rc_motor_set(3, 0);
-        gpio_put(LED_PIN, 0);
+    else if (left_sp < -0.05) {}
+    else {
+        l_duty = 0;
     }
-    else if (linear_x == 0 && angular_z > 0) {
-        gpio_put(LED_PIN, 1);
-        // set the left motor
-        // rc_motor_set(1, LEFT_MOTOR_POL * 10000);
-        // set the right motor
-        rc_motor_set(3, RIGHT_MOTOR_POL * 10000);
-        sleep_ms(400);
-        rc_motor_set(1, 0);
-        rc_motor_set(3, 0);
-        gpio_put(LED_PIN, 0);
+
+    if (right_sp > 0.05) {
+        r_duty = SLOPE_R * right_sp + INTERCEPT_R;
     }
+    else if (right_sp < -0.05) {}
+    else {
+        r_duty = 0;
+    }
+
+    // Clamp duty cycle to [-1, 1]
+    l_duty = clamp_duty(l_duty);
+    r_duty = clamp_duty(r_duty);
+
+    // duty to motor command
+    l_cmd = LEFT_MOTOR_POL * (int)(l_duty * 0.95 * pow(2, 15));
+    r_cmd = RIGHT_MOTOR_POL * (int)(r_duty * 0.95 * pow(2, 15));
+
+    // set left and right motor command
+    rc_motor_set(LEFT_MOTOR_CHANNEL, l_cmd);
+    rc_motor_set(RIGHT_MOTOR_CHANNEL, r_cmd);
+    sleep_ms(500);
+    rc_motor_set(LEFT_MOTOR_CHANNEL, 0);
+    rc_motor_set(RIGHT_MOTOR_CHANNEL, 0);
+
+    gpio_put(LED_PIN, 0);
+
+
 }
 
 void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
@@ -110,7 +130,7 @@ void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     delta_d = (left_delta + right_delta) / 2;
     delta_yaw = (right_delta - left_delta) / WHEEL_BASE;
     delta_x = delta_d * cos(current_odom.yaw + delta_yaw / 2);
-    delta_y = delta_d * sin(current_odom.yaw + delta_yaw / 2);
+    delta_y = -delta_d * sin(current_odom.yaw + delta_yaw / 2);
     current_odom.x += delta_x;
     current_odom.y += delta_y;
     current_odom.yaw += delta_yaw;

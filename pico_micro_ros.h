@@ -11,6 +11,14 @@
 #define LEFT_MOTOR_POL -1
 #define RIGHT_MOTOR_POL 1
 
+#define SLOPE_L 1.3883
+#define SLOPE_R 1.424
+#define INTERCEPT_L 0.1193
+#define INTERCEPT_R 0.10046
+
+#define LEFT_MOTOR_CHANNEL 1
+#define RIGHT_MOTOR_CHANNEL 3
+
 #define PI 3.142
 
 typedef struct
