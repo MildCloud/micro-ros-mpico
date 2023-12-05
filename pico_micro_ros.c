@@ -82,7 +82,9 @@ void twist_callback(const void *msg_in) {
     if (left_sp > 0.05) {
         l_duty = SLOPE_L * left_sp + INTERCEPT_L;
     }
-    else if (left_sp < -0.05) {}
+    else if (left_sp < -0.05) {
+        l_duty = SLOPE_L * left_sp - INTERCEPT_L;
+    }
     else {
         l_duty = 0;
     }
@@ -90,7 +92,9 @@ void twist_callback(const void *msg_in) {
     if (right_sp > 0.05) {
         r_duty = SLOPE_R * right_sp + INTERCEPT_R;
     }
-    else if (right_sp < -0.05) {}
+    else if (right_sp < -0.05) {
+        r_duty = SLOPE_R * right_sp - INTERCEPT_R;
+    }
     else {
         r_duty = 0;
     }
@@ -106,9 +110,9 @@ void twist_callback(const void *msg_in) {
     // set left and right motor command
     rc_motor_set(LEFT_MOTOR_CHANNEL, l_cmd);
     rc_motor_set(RIGHT_MOTOR_CHANNEL, r_cmd);
-    sleep_ms(500);
-    rc_motor_set(LEFT_MOTOR_CHANNEL, 0);
-    rc_motor_set(RIGHT_MOTOR_CHANNEL, 0);
+    // sleep_ms(500);
+    // rc_motor_set(LEFT_MOTOR_CHANNEL, 0);
+    // rc_motor_set(RIGHT_MOTOR_CHANNEL, 0);
 
     gpio_put(LED_PIN, 0);
 
@@ -130,7 +134,7 @@ void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     delta_d = (left_delta + right_delta) / 2;
     delta_yaw = (right_delta - left_delta) / WHEEL_BASE;
     delta_x = delta_d * cos(current_odom.yaw + delta_yaw / 2);
-    delta_y = -delta_d * sin(current_odom.yaw + delta_yaw / 2);
+    delta_y = delta_d * sin(current_odom.yaw + delta_yaw / 2);
     current_odom.x += delta_x;
     current_odom.y += delta_y;
     current_odom.yaw += delta_yaw;
